@@ -221,7 +221,6 @@ class HubBuilder(ctk.CTk):
         if self._building:
             return
 
-        # ตรวจ nuitka
         if importlib.util.find_spec("nuitka") is None:
             self._log("✗ ไม่พบ nuitka — ติดตั้งก่อนนะ:", "red")
             self._log("  pip install nuitka", "dim")
@@ -249,7 +248,6 @@ class HubBuilder(ctk.CTk):
                 "--output-filename=SynaptaHubAgent",
             ]
 
-            # --windows-console-mode เฉพาะ Windows เท่านั้น
             if sys.platform == "win32":
                 os_choice = self.v_os_type.get()
                 if os_choice in ("Auto", "Windows") and not self.v_console.get():
@@ -271,7 +269,6 @@ class HubBuilder(ctk.CTk):
                 q.put(("line", line.rstrip()))
             proc.wait()
 
-            # ลบ folder ขยะที่ nuitka ทิ้งไว้ (ทั้งสำเร็จและล้มเหลว)
             self._cleanup_build_dirs(q)
 
             if proc.returncode == 0:
@@ -286,9 +283,7 @@ class HubBuilder(ctk.CTk):
     def _cleanup_build_dirs(self, q):
         """ลบ .build และ .onefile-build ที่ nuitka ทิ้งไว้หลัง compile"""
         suffixes = (".build", ".onefile-build")
-        # หาใน dist/ และ project root (nuitka บางเวอร์ชันสร้างคนละที่)
-        search_dirs = [DIST_DIR, PROJECT_ROOT]
-        for search in search_dirs:
+        for search in [DIST_DIR, PROJECT_ROOT]:
             if not os.path.isdir(search):
                 continue
             for entry in os.listdir(search):
