@@ -14,25 +14,6 @@ _cwd: str = str(Path(__file__).resolve().parent.parent)
 _proc: subprocess.Popen | None = None
 _proc_lock = threading.Lock()
 
-SCHEMA = {
-    "type": "function",
-    "function": {
-        "name": "os_exec",
-        "description": (
-            "Execute a terminal command on this computer and return its output. "
-            "Supports cd to change directory — the new directory persists across calls. "
-            "Chain multiple calls to complete multi-step tasks."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "command": {"type": "string", "description": "The exact command to run"},
-            },
-            "required": ["command"],
-        },
-    },
-}
-
 
 def run(
     command: str,
@@ -119,6 +100,3 @@ def reset_cwd() -> None:
     _cwd = str(Path(__file__).resolve().parent.parent)
 
 
-def call(args: dict, timeout: float = 60, kill_event: threading.Event | None = None,
-         on_line: Callable[[str], None] | None = None, **_) -> str:
-    return run(args["command"], timeout=timeout, kill_event=kill_event, on_line=on_line)

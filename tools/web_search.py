@@ -5,28 +5,6 @@ Web search tool via Serper API.
 import os
 import requests
 
-SCHEMA = {
-    "type": "function",
-    "function": {
-        "name": "web_search",
-        "description": (
-            "Search the web. Use to look up command syntax, troubleshoot errors, "
-            "or find information needed to complete the task."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "Search query"},
-            },
-            "required": ["query"],
-        },
-    },
-}
-
-
-def call(args: dict, **_) -> str:
-    return search(args["query"])
-
 
 def search(query: str) -> str:
     api_key = os.getenv("SERPER_API_KEY", "")

@@ -91,24 +91,6 @@ def snapshot_text() -> str:
     return '\n'.join(lines)
 
 
-# ── Snapshot (JSON) — ใช้ตอบ tool query_kg ────────────────────────────────────
-
-def snapshot_json() -> dict[str, Any]:
-    res = _live_resources()
-    return {
-        'machine': {
-            'hostname': _HOSTNAME,
-            'os':       _OS_FULL,
-            'cpu':      f'{_CPU} ({_CORES} cores{_FREQ_STR})',
-            'cpu_percent': res['cpu_percent'],
-            'ram': {'total_gb': res['ram_total_gb'], 'free_gb': res['ram_free_gb']},
-            'disk': {'total_gb': res['disk_total_gb'], 'free_gb': res['disk_free_gb']},
-        },
-        'session': {
-            'cwd': _current_cwd(),
-        },
-    }
-
 
 # ── Brief one-liner — ใช้ publish ไป web app ตอนเริ่ม task ────────────────────
 
