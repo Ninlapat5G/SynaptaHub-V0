@@ -70,7 +70,7 @@ def run(
     _os_exec.reset_cwd()
 
     system_prompt = _SYSTEM.format(os_type=os_type, now=now) + "\n\n" + kg.snapshot_text()
-    graph = create_react_agent(_model, _make_tools(pub, kill_event, timeout), state_modifier=system_prompt)
+    graph = create_react_agent(_model, _make_tools(pub, kill_event, timeout), prompt=system_prompt)
 
     final_text = ""
     try:
