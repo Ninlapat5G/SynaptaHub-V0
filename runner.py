@@ -76,7 +76,7 @@ def run(
     final_text = ""
     for event in graph.stream(
         {"messages": [HumanMessage(task)]},
-        config={"recursion_limit": 20},
+        config={"recursion_limit": 5},
         stream_mode="updates",
     ):
         if kill_event.is_set():
