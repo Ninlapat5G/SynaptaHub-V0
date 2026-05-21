@@ -91,13 +91,3 @@ def snapshot_text() -> str:
     return '\n'.join(lines)
 
 
-
-# ── Brief one-liner — ใช้ publish ไป web app ตอนเริ่ม task ────────────────────
-
-def snapshot_brief() -> str:
-    res = _live_resources()
-    return (
-        f'cwd={_current_cwd()} | '
-        f'disk={res["disk_free_gb"]}GB free | '
-        f'ram={res["ram_free_gb"]}GB free'
-    )
