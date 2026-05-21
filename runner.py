@@ -73,16 +73,28 @@ def run(
     graph = create_react_agent(_model, _make_tools(pub, kill_event, timeout), state_modifier=system_prompt)
 
     final_text = ""
-    for event in graph.stream(
-        {"messages": [HumanMessage(task)]},
-        config={"recursion_limit": 5},
-        stream_mode="updates",
-    ):
-        if kill_event.is_set():
-            return "[cancelled]"
-        if "agent" in event:
-            msg = event["agent"]["messages"][-1]
-            if msg.content and not getattr(msg, "tool_calls", None):
-                final_text = str(msg.content)
+    try:
+        for event in graph.stream(
+            {"messages": [HumanMessage(task)]},
+            config={"recursion_limit": 10},
+            stream_mode="updates",
+        ):
+            if kill_event.is_set():
+                return "[cancelled]"
+            if "tools" in event:
+                for msg in event["tools"]["messages"]:
+                    print(f"      [{msg.name}] → {str(msg.content)[:120]}")
+            if "agent" in event:
+                msg = event["agent"]["messages"][-1]
+                tool_calls = getattr(msg, "tool_calls", None)
+                if tool_calls:
+                    for tc in tool_calls:
+                        print(f"      call {tc['name']}({tc['args']})")
+                elif msg.content:
+                    final_text = str(msg.content)
+                    print(f"      final → {final_text[:120]}")
+    except Exception as e:
+        print(f"      [error] {e}")
+        return f"[error] {e}"
 
     return final_text or "[no response]"
