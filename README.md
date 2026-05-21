@@ -14,7 +14,7 @@ MQTT Broker
      │
      ▼
 SynaptaHub (PC/Mac/Linux)
-     │  ReAct loop: คิด → รัน command → ดูผล → คิดต่อ
+     │  LangGraph ReAct agent: คิด → รัน tool → คิดต่อ
      ▼
 MQTT Broker → Web App แสดงผลแบบ streaming
 ```
@@ -68,9 +68,9 @@ GUI จะขึ้นมาให้กรอก settings → กด Build → 
 |------|--------|
 | `os_exec` | รัน shell command บนเครื่อง |
 | `web_search` | ค้นข้อมูลจากอินเทอร์เน็ต (Serper API) |
-| `query_kg` | refresh สถานะเครื่องสด (RAM, disk, CWD, ประวัติ command) |
+| `query_kg` | refresh สถานะเครื่องสด (RAM, disk, CWD) |
 
-เพิ่ม tool ใหม่: สร้าง `tools/<name>.py` แล้วเพิ่มใน `tools/__init__.py`
+เพิ่ม tool ใหม่: สร้าง `tools/<name>.py` แล้วลงทะเบียนใน `runner.py _make_tools()`
 
 ---
 
