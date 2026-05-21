@@ -91,6 +91,9 @@ def _handle_task(task: str, received_at: float) -> None:
         print(f"      Total elapsed : {(time.perf_counter() - t0) * 1000:.0f} ms")
         _end(result)
     except Exception as e:
+        import traceback
+        print(f"      [error] {e}")
+        traceback.print_exc()
         _end(f"[error] {e}")
     finally:
         _task_lock.release()
