@@ -112,9 +112,7 @@ def run(
     if now is None:
         now = kg.now_thai()
 
-    # ── 1. Reset session state ────────────────────────────────────────────────
     os_exec.reset_cwd()
-    kg.reset_session()
 
     # publish KG snapshot brief ให้ web app รู้ตอนเริ่ม
     pub(f"[hub-kg] {kg.snapshot_brief()}")

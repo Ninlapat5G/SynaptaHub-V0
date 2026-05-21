@@ -43,10 +43,6 @@ def run(
     global _cwd, _proc
 
     cmd = command.strip()
-    cwd_when_started = _cwd
-
-    # lazy import — เลี่ยง circular (kg → os_exec)
-    from .. import kg
 
     # Handle cd separately — subprocess can't persist directory changes
     if cmd.lower() == "cd" or cmd.lower().startswith("cd "):
@@ -60,12 +56,8 @@ def run(
 
         if new_path.is_dir():
             _cwd = str(new_path)
-            result = f"[cwd] {_cwd}"
-            kg.record_command(cmd, cwd_when_started, "ok", result)
-            return result
-        result = f"[error] Directory not found: {target}"
-        kg.record_command(cmd, cwd_when_started, "error", result)
-        return result
+            return f"[cwd] {_cwd}"
+        return f"[error] Directory not found: {target}"
 
     exit_status = "ok"
     try:
@@ -92,7 +84,6 @@ def run(
 
         if kill_event and kill_event.is_set():
             _proc.kill()
-            kg.record_command(cmd, cwd_when_started, "cancelled", "[cancelled]")
             return "[cancelled]"
 
         try:
@@ -106,13 +97,10 @@ def run(
             exit_status = "error"
 
         result = "\n".join(lines) or "(no output)"
-        kg.record_command(cmd, cwd_when_started, exit_status, result)
         return result
 
     except Exception as e:
-        result = f"[error] {e}"
-        kg.record_command(cmd, cwd_when_started, "error", result)
-        return result
+        return f"[error] {e}"
 
     finally:
         with _proc_lock:

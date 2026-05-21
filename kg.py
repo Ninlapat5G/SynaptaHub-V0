@@ -7,7 +7,6 @@ Knowledge Graph (Hub)
     Machine ── runs ──> OS
     Machine ── has ──> Resources (CPU / RAM / Disk)
     Session ── in ──> CWD
-    Session ── ran ──> CommandHistory ── produced ──> Outputs
 
 Singleton — hub รับ task ทีละงานเท่านั้น (lock อยู่แล้ว) จึงปลอดภัย
 """
@@ -15,9 +14,6 @@ Singleton — hub รับ task ทีละงานเท่านั้น (
 from __future__ import annotations
 
 import platform
-import time
-from collections import deque
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -53,38 +49,6 @@ _CORES    = psutil.cpu_count(logical=False) or 1
 _CPU_FREQ = psutil.cpu_freq()
 _FREQ_STR = f" @ {_CPU_FREQ.max / 1000:.1f} GHz" if _CPU_FREQ else ""
 
-# ── Session state (mutable) ───────────────────────────────────────────────────
-
-@dataclass
-class CommandRecord:
-    command: str
-    cwd_when_ran: str
-    exit_status: str          # "ok" | "error" | "timeout" | "cancelled"
-    output_brief: str         # 80 chars แรก
-    timestamp: float          # epoch seconds
-
-
-_HISTORY_MAX = 10
-_history: deque[CommandRecord] = deque(maxlen=_HISTORY_MAX)
-
-
-def reset_session() -> None:
-    """เรียกตอนเริ่ม task ใหม่ — ล้างประวัติคำสั่งของ session ก่อน"""
-    _history.clear()
-
-
-def record_command(command: str, cwd: str, exit_status: str, output: str) -> None:
-    """บันทึกคำสั่งที่เพิ่งรัน (เรียกจาก os_exec.run หลัง command จบ)"""
-    brief = output.replace('\n', ' ⏎ ')[:80]
-    _history.append(CommandRecord(
-        command=command,
-        cwd_when_ran=cwd,
-        exit_status=exit_status,
-        output_brief=brief,
-        timestamp=time.time(),
-    ))
-
-
 # ── Live readouts ─────────────────────────────────────────────────────────────
 
 def _live_resources() -> dict[str, Any]:
@@ -108,9 +72,8 @@ def _current_cwd() -> str:
 # ── Snapshot (text) — ใส่ใน system prompt ของ runner.py ──────────────────────
 
 def snapshot_text() -> str:
-    res  = _live_resources()
-    cwd  = _current_cwd()
-    hist = list(_history)
+    res = _live_resources()
+    cwd = _current_cwd()
 
     lines = []
     lines.append('[KNOWLEDGE GRAPH — สถานะเครื่อง + session]')
@@ -124,18 +87,6 @@ def snapshot_text() -> str:
     lines.append('')
     lines.append('Session:')
     lines.append(f'  └─ cwd: {cwd}')
-    lines.append('')
-
-    if hist:
-        lines.append(f'Recent commands ({len(hist)}):')
-        for i, rec in enumerate(hist):
-            branch = '└─' if i == len(hist) - 1 else '├─'
-            lines.append(f'  {branch} [{rec.exit_status}] $ {rec.command}')
-            indent = '     ' if i == len(hist) - 1 else '  │  '
-            if rec.output_brief:
-                lines.append(f'{indent} → {rec.output_brief}')
-    else:
-        lines.append('Recent commands: (ยังไม่มี — เริ่ม session ใหม่)')
 
     return '\n'.join(lines)
 
@@ -155,15 +106,6 @@ def snapshot_json() -> dict[str, Any]:
         },
         'session': {
             'cwd': _current_cwd(),
-            'recent_commands': [
-                {
-                    'command':     r.command,
-                    'cwd':         r.cwd_when_ran,
-                    'exit_status': r.exit_status,
-                    'output_brief': r.output_brief,
-                }
-                for r in _history
-            ],
         },
     }
 
@@ -175,6 +117,5 @@ def snapshot_brief() -> str:
     return (
         f'cwd={_current_cwd()} | '
         f'disk={res["disk_free_gb"]}GB free | '
-        f'ram={res["ram_free_gb"]}GB free | '
-        f'history={len(_history)}'
+        f'ram={res["ram_free_gb"]}GB free'
     )
