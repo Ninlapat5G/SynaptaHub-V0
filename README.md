@@ -86,15 +86,6 @@ Response จบด้วย `(mqtt_end)` เสมอ
 
 ---
 
-## Coming soon
-
-- **Scheduled tasks** — ตั้งเวลาให้รัน task อัตโนมัติ
-- **File transfer** — ส่ง/รับไฟล์ผ่าน MQTT
-- **Multi-hub** — ควบคุมหลายเครื่องพร้อมกัน
-- **Sandboxed execution** — จำกัด path ที่ agent เข้าถึงได้
-
----
-
 ## License
 
 GPL v3
