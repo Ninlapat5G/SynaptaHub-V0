@@ -6,17 +6,24 @@ Python agent สำหรับระบบ [SynaptaOS](https://github.com/Ninla
 
 ## How it fits
 
-```
-SynaptaOS Web App
-     │  "เช็ค disk ที่เหลือ แล้วลบ temp files"
-     ▼
-MQTT Broker
-     │
-     ▼
-SynaptaHub (PC/Mac/Linux)
-     │  LangGraph ReAct agent: คิด → รัน tool → คิดต่อ
-     ▼
-MQTT Broker → Web App แสดงผลแบบ streaming
+```mermaid
+flowchart TD
+    classDef app    fill:#1d3557,color:#fff,stroke:#457b9d,stroke-width:2px
+    classDef broker fill:#457b9d,color:#fff,stroke:none
+    classDef hub    fill:#2d6a4f,color:#fff,stroke:none
+    classDef tool   fill:#6d6875,color:#fff,stroke:none
+
+    WA[SynaptaOS Web App]:::app
+    B1[MQTT Broker]:::broker
+    HUB["SynaptaHub\n(PC / Mac / Linux)"]:::hub
+    TOOLS["os_exec · web_search · query_kg"]:::tool
+    B2[MQTT Broker]:::broker
+
+    WA -->|task| B1
+    B1 --> HUB
+    HUB <-->|LangGraph ReAct loop| TOOLS
+    HUB -->|stream output| B2
+    B2 -->|streaming| WA
 ```
 
 ---
