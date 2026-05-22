@@ -46,9 +46,9 @@ _SYSTEM = """\
 """
 
 _model = ChatOpenAI(
-    model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
+    model=os.getenv("LLM_MODEL", "typhoon-v2.5-30b-a3b-instruct"),
     api_key=os.getenv("LLM_API_KEY", ""),
-    base_url=os.getenv("LLM_BASE_URL", "https://api.openai.com/v1"),
+    base_url=os.getenv("LLM_BASE_URL", "https://api.opentyphoon.ai/v1"),
     temperature=0,
 )
 
