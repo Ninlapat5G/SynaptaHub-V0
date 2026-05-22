@@ -28,7 +28,7 @@ def search(query: str) -> str:
             parts.append(box["snippet"])
 
         for r in (data.get("organic") or [])[:3]:
-            parts.append(f"{r.get('title', '')}: {r.get('snippet', '')}")
+            parts.append(f"{r.get('title', '')}: {r.get('snippet', '')}\n{r.get('link', '')}")
 
         return "\n".join(parts) or "No results found"
 

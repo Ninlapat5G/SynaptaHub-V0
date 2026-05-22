@@ -50,10 +50,9 @@ CANCEL_TOPIC = _t(f"hub/{AGENT}/cancel")
 
 # ── State ──────────────────────────────────────────────────────────────────────
 
-_client:           mqtt.Client | None = None
-_task_lock         = threading.Lock()
-_kill_event        = threading.Event()
-_pending_question: str | None = None  # คำถามที่ hub ถามค้างไว้ รอคำตอบจาก user
+_client:    mqtt.Client | None = None
+_task_lock  = threading.Lock()
+_kill_event = threading.Event()
 
 # ── MQTT helpers ───────────────────────────────────────────────────────────────
 
@@ -70,8 +69,6 @@ def _end(msg: str = "") -> None:
 # ── Task handler ───────────────────────────────────────────────────────────────
 
 def _handle_task(task: str, received_at: float) -> None:
-    global _pending_question
-
     if not _task_lock.acquire(blocking=False):
         _end("[busy] Already running a task — send 'cancel' to abort.")
         return
@@ -79,34 +76,19 @@ def _handle_task(task: str, received_at: float) -> None:
     _kill_event.clear()
     _pub("(mqtt_start)")
     dispatch_ms = (time.perf_counter() - received_at) * 1000
-
-    # ถ้ามีคำถามค้างไว้ → รวม context เข้าไปใน task เพื่อให้ agent รู้ว่ากำลังตอบอะไร
-    full_task = task
-    if _pending_question:
-        full_task = f"[บริบท: ก่อนหน้านี้คุณถามว่า '{_pending_question}']\n{task}"
-        print(f"      context: {_pending_question!r}")
-
-    print(f"\n[Hub] Task : {full_task}")
+    print(f"\n[Hub] Task : {task}")
     print(f"      MQTT dispatch : {dispatch_ms:.0f} ms")
 
     try:
         t0 = time.perf_counter()
         result = runner.run(
-            task=full_task,
+            task=task,
             os_type=OS_TYPE,
             pub=_pub,
             kill_event=_kill_event,
             timeout=TIMEOUT,
         )
         print(f"      Total elapsed : {(time.perf_counter() - t0) * 1000:.0f} ms")
-
-        # ภารกิจลุล่วง → ลบ pending; ถามอีก → อัพเดต pending รอรอบถัดไป
-        if result.strip().endswith('?'):
-            _pending_question = result.strip()
-            print(f"      pending_question: {_pending_question!r}")
-        else:
-            _pending_question = None
-
         _end(result)
     except Exception as e:
         import traceback
@@ -147,8 +129,8 @@ def _on_message(client, userdata, msg):
         threading.Thread(target=_handle_task, args=(payload, received_at), daemon=True).start()
 
 
-def _on_disconnect(client, userdata, rc, properties=None):
-    print(f"[Hub] Disconnected rc={rc} — will reconnect…")
+def _on_disconnect(client, userdata, disconnect_flags, reason_code, properties):
+    print(f"[Hub] Disconnected rc={reason_code} — will reconnect…")
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
