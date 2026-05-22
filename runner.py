@@ -57,8 +57,7 @@ def _make_tools(pub: Callable[[str], None], kill_event: threading.Event, timeout
     @tool
     def os_exec(command: str) -> str:
         """Execute a terminal command on this computer. Supports cd — directory persists across calls."""
-        pub(f"$ {command}")
-        return _os_exec.run(command, timeout=timeout, kill_event=kill_event, on_line=pub)
+        return _os_exec.run(command, timeout=timeout, kill_event=kill_event)
 
     @tool
     def web_search(query: str) -> str:
