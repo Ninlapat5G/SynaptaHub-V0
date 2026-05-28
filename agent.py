@@ -1,24 +1,24 @@
 """
 SynaptaOS Hub Agent
 ===================
-Connects to MQTT broker via MQTT 5, receives natural language tasks,
-runs a ReAct loop (os_exec + web_search), and streams results back.
+MQTT 5 agent: receives natural-language tasks, runs a ReAct loop
+(os_exec + web_search), and replies on the request's ResponseTopic.
 
-Topic layout (auto-built from MQTT_BASE_TOPIC + AGENT_NAME):
+Topics (built from MQTT_BASE_TOPIC + AGENT_NAME):
   cmd    : {base}/hub/{AGENT_NAME}/cmd
-  output : {base}/hub/{AGENT_NAME}/output  (ใช้เมื่อไม่มี ResponseTopic)
   cancel : {base}/hub/{AGENT_NAME}/cancel
+  status : {base}/hub/{AGENT_NAME}/status   (retained online / LWT offline)
 
-MQTT 5:
-  - รับ ResponseTopic + CorrelationData จาก request
-  - ส่ง stream_status user property (chunk | end) แทน sentinel string
-  - Fallback: ถ้าไม่มี ResponseTopic → publish ไป OUTPUT_TOPIC + (mqtt_end)
+Reply protocol (per request, MQTT 5):
+  - reply goes to the request's ResponseTopic, echoing CorrelationData
+  - user property stream_status: ping | chunk | end
+  - ping is a heartbeat that keeps the requester's idle timer alive
+    during long tasks; chunk carries the result; end closes the stream
 """
 
 import os
 import platform
 import threading
-import time
 from pathlib import Path
 
 import paho.mqtt.client as mqtt
@@ -44,14 +44,16 @@ TIMEOUT = float(os.getenv("COMMAND_TIMEOUT", "60"))
 _OS_MAP = {"Windows": "windows", "Darwin": "mac", "Linux": "linux"}
 OS_TYPE = os.getenv("OS_TYPE") or _OS_MAP.get(platform.system(), "linux")
 
+HEARTBEAT_SEC = 3
+
 
 def _t(suffix: str) -> str:
     return f"{BASE}/{suffix}" if BASE else suffix
 
 
 CMD_TOPIC    = _t(f"hub/{AGENT}/cmd")
-OUTPUT_TOPIC = _t(f"hub/{AGENT}/output")
 CANCEL_TOPIC = _t(f"hub/{AGENT}/cancel")
+STATUS_TOPIC = _t(f"hub/{AGENT}/status")
 
 # ── State ──────────────────────────────────────────────────────────────────────
 
@@ -59,127 +61,83 @@ _client:    mqtt.Client | None = None
 _task_lock  = threading.Lock()
 _kill_event = threading.Event()
 
-# ── MQTT 5 publish helpers ─────────────────────────────────────────────────────
+# ── Reply (MQTT 5) ───────────────────────────────────────────────────────────────
 
-def _make_props(stream_status: str, correlation_data: bytes | None) -> Properties:
+def _reply(stream_status: str, text: str, response_topic: str | None, correlation_data: bytes | None) -> None:
+    if not _client or not response_topic:
+        return
     props = Properties(PacketTypes.PUBLISH)
     props.UserProperty = [("stream_status", stream_status)]
     if correlation_data:
         props.CorrelationData = correlation_data
-    return props
-
-
-def _pub_chunk(text: str, response_topic: str | None, correlation_data: bytes | None) -> None:
-    if not _client:
-        return
-    target = response_topic or OUTPUT_TOPIC
-    props  = _make_props("chunk", correlation_data)
-    _client.publish(target, text, qos=1, properties=props)
-
-
-def _pub_end(response_topic: str | None, correlation_data: bytes | None) -> None:
-    if not _client:
-        return
-    target = response_topic or OUTPUT_TOPIC
-    props  = _make_props("end", correlation_data)
-
-    if response_topic:
-        # MQTT 5: ส่ง empty payload + stream_status=end
-        _client.publish(target, "", qos=1, properties=props)
-    else:
-        # Backward compat: publish sentinel string สำหรับ client เก่าที่ฟัง OUTPUT_TOPIC
-        _client.publish(target, "(mqtt_end)", qos=1)
+    _client.publish(response_topic, text, qos=1, properties=props)
 
 # ── Task handler ───────────────────────────────────────────────────────────────
 
-def _handle_task(
-    task: str,
-    received_at: float,
-    response_topic: str | None,
-    correlation_data: bytes | None,
-) -> None:
+def _handle_task(task: str, response_topic: str | None, correlation_data: bytes | None) -> None:
     if not _task_lock.acquire(blocking=False):
-        _pub_chunk("[busy] Already running a task — send 'cancel' to abort.", response_topic, correlation_data)
-        _pub_end(response_topic, correlation_data)
+        _reply("chunk", "[busy] กำลังทำงานอื่นอยู่ — ส่ง cancel เพื่อยกเลิก", response_topic, correlation_data)
+        _reply("end", "", response_topic, correlation_data)
         return
 
     _kill_event.clear()
+    print(f"\n[Hub] Task: {task}")
 
-    dispatch_ms = (time.perf_counter() - received_at) * 1000
-    print(f"\n[Hub] Task : {task}")
-    print(f"      MQTT dispatch : {dispatch_ms:.0f} ms")
+    # heartbeat — ปิงทุก HEARTBEAT_SEC วิ ให้ตัวจับเวลาฝั่ง requester ไม่หมดระหว่างงานยาว
+    stop_heartbeat = threading.Event()
+
+    def heartbeat() -> None:
+        while not stop_heartbeat.wait(HEARTBEAT_SEC):
+            _reply("ping", "", response_topic, correlation_data)
+
     if response_topic:
-        print(f"      Reply topic   : {response_topic}")
-
-    # สร้าง pub closure ที่ capture response_topic + correlation_data
-    def pub(text: str) -> None:
-        _pub_chunk(text, response_topic, correlation_data)
+        threading.Thread(target=heartbeat, daemon=True).start()
 
     try:
-        t0 = time.perf_counter()
-        result = runner.run(
-            task=task,
-            os_type=OS_TYPE,
-            pub=pub,
-            kill_event=_kill_event,
-            timeout=TIMEOUT,
-        )
-        print(f"      Total elapsed : {(time.perf_counter() - t0) * 1000:.0f} ms")
-        if result:
-            _pub_chunk(result, response_topic, correlation_data)
-        _pub_end(response_topic, correlation_data)
+        result = runner.run(task=task, os_type=OS_TYPE, kill_event=_kill_event, timeout=TIMEOUT)
+        _reply("chunk", result, response_topic, correlation_data)
+        _reply("end", "", response_topic, correlation_data)
     except Exception as e:
         import traceback
-        print(f"      [error] {e}")
         traceback.print_exc()
-        _pub_chunk(f"[error] {e}", response_topic, correlation_data)
-        _pub_end(response_topic, correlation_data)
+        _reply("chunk", f"[error] {e}", response_topic, correlation_data)
+        _reply("end", "", response_topic, correlation_data)
     finally:
+        stop_heartbeat.set()
         _task_lock.release()
-
-# ── Cancel ─────────────────────────────────────────────────────────────────────
-
-def _cancel() -> None:
-    print("[Hub] Cancel received")
-    _kill_event.set()
-    os_exec.cancel()
 
 # ── MQTT callbacks ─────────────────────────────────────────────────────────────
 
 def _on_connect(client, userdata, flags, reason_code, properties=None):
-    if reason_code.value == 0:
-        client.subscribe(CMD_TOPIC,    qos=1)
-        client.subscribe(CANCEL_TOPIC, qos=1)
-        print("[Hub] Connected (MQTT 5)")
-        print(f"      CMD    : {CMD_TOPIC}")
-        print(f"      OUTPUT : {OUTPUT_TOPIC}  (fallback)")
-        print(f"      CANCEL : {CANCEL_TOPIC}")
-    else:
-        print(f"[Hub] Connect failed reason={reason_code}")
+    if reason_code.value != 0:
+        print(f"[Hub] Connect failed: {reason_code}")
+        return
+    client.subscribe(CMD_TOPIC,    qos=1)
+    client.subscribe(CANCEL_TOPIC, qos=1)
+    client.publish(STATUS_TOPIC, "online", qos=1, retain=True)
+    print("[Hub] Connected (MQTT 5)")
+    print(f"      CMD    : {CMD_TOPIC}")
+    print(f"      STATUS : {STATUS_TOPIC}")
 
 
 def _on_message(client, userdata, msg):
     if msg.topic == CANCEL_TOPIC:
-        _cancel()
+        print("[Hub] Cancel received")
+        _kill_event.set()
+        os_exec.cancel()
         return
 
-    payload = msg.payload.decode(errors="replace").strip()
-    if not payload:
+    task = msg.payload.decode(errors="replace").strip()
+    if not task:
         return
 
-    # อ่าน MQTT 5 properties
-    props          = getattr(msg, "properties", None)
-    response_topic = getattr(props, "ResponseTopic",        None)
-    correlation_data = getattr(props, "CorrelationData",     None)
-    expiry         = getattr(props, "MessageExpiryInterval", None)
+    props = getattr(msg, "properties", None)
+    response_topic   = getattr(props, "ResponseTopic",   None)
+    correlation_data = getattr(props, "CorrelationData", None)
 
-    if expiry is not None:
-        print(f"      Message expiry remaining: {expiry}s")
-
-    received_at = time.perf_counter()
     threading.Thread(
         target=_handle_task,
-        args=(payload, received_at, response_topic, correlation_data),
+        args=(task, response_topic, correlation_data),
         daemon=True,
     ).start()
 
@@ -203,12 +161,14 @@ def main():
     _client.on_message    = _on_message
     _client.on_disconnect = _on_disconnect
 
+    # Last Will — broker จะ publish "offline" ให้อัตโนมัติถ้า hub หลุดกะทันหัน
+    _client.will_set(STATUS_TOPIC, "offline", qos=1, retain=True)
+
     if USE_TLS:
         import ssl
         _client.tls_set(cert_reqs=ssl.CERT_NONE)
 
-    conn_props = Properties(PacketTypes.CONNECT)
-    _client.connect(BROKER, PORT, keepalive=60, properties=conn_props)
+    _client.connect(BROKER, PORT, keepalive=60, properties=Properties(PacketTypes.CONNECT))
     _client.loop_forever()
 
 

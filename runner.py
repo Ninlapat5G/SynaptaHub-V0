@@ -1,7 +1,6 @@
 import os
 import threading
 from pathlib import Path
-from typing import Callable
 
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
@@ -53,7 +52,7 @@ _model = ChatOpenAI(
 )
 
 
-def _make_tools(pub: Callable[[str], None], kill_event: threading.Event, timeout: float):
+def _make_tools(kill_event: threading.Event, timeout: float):
     @tool
     def os_exec(command: str) -> str:
         """Execute a terminal command on this computer. Supports cd — directory persists across calls."""
@@ -75,7 +74,6 @@ def _make_tools(pub: Callable[[str], None], kill_event: threading.Event, timeout
 def run(
     task: str,
     os_type: str,
-    pub: Callable[[str], None],
     kill_event: threading.Event,
     timeout: float = 60,
     now: str | None = None,
@@ -86,7 +84,7 @@ def run(
     _os_exec.reset_cwd()
 
     system_prompt = _SYSTEM.format(os_type=os_type, now=now) + "\n\n" + kg.snapshot_text()
-    graph = create_react_agent(_model, _make_tools(pub, kill_event, timeout), prompt=system_prompt)
+    graph = create_react_agent(_model, _make_tools(kill_event, timeout), prompt=system_prompt)
 
     final_text = ""
     try:

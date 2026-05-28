@@ -85,11 +85,12 @@ GUI จะขึ้นมาให้กรอก settings → กด Build → 
 
 | Topic | Direction | Description |
 |-------|-----------|-------------|
-| `{base}/hub/{name}/cmd` | Web App → Hub | รับ task |
-| `{base}/hub/{name}/output` | Hub → Web App | stream ผลทีละบรรทัด |
+| `{base}/hub/{name}/cmd` | Web App → Hub | รับ task (แนบ MQTT 5 ResponseTopic) |
 | `{base}/hub/{name}/cancel` | Web App → Hub | ยกเลิก task ที่รันอยู่ |
+| `{base}/hub/{name}/status` | Hub → Web App | `online` (retained) / `offline` (Last Will) |
 
-Response จบด้วย `(mqtt_end)` เสมอ
+**Reply (MQTT 5):** คำตอบส่งกลับที่ `ResponseTopic` ของแต่ละ request โดยใช้ user property `stream_status`:
+`ping` (heartbeat กันตัวจับเวลาหมดระหว่างงานยาว) · `chunk` (ผลลัพธ์) · `end` (จบ stream)
 
 ---
 
