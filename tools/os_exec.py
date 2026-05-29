@@ -8,7 +8,6 @@ task so the LLM can cd into directories and run subsequent commands there.
 import subprocess
 import threading
 from pathlib import Path
-from typing import Callable
 
 _cwd: str = str(Path(__file__).resolve().parent.parent)
 _proc: subprocess.Popen | None = None
@@ -19,7 +18,6 @@ def run(
     command: str,
     timeout: float = 60,
     kill_event: threading.Event | None = None,
-    on_line: Callable[[str], None] | None = None,
 ) -> str:
     global _cwd, _proc
 
@@ -58,10 +56,7 @@ def run(
         for line in _proc.stdout:
             if kill_event and kill_event.is_set():
                 break
-            stripped = line.rstrip()
-            lines.append(stripped)
-            if on_line:
-                on_line(stripped)
+            lines.append(line.rstrip())
 
         if kill_event and kill_event.is_set():
             _proc.kill()

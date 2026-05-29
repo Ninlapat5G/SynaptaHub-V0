@@ -207,7 +207,6 @@ class HubBuilder(ctk.CTk):
             "",
             f"COMMAND_TIMEOUT={self.v_timeout.get()}",
             "",
-            "CREWAI_TRACING_ENABLED=false",
             "OTEL_SDK_DISABLED=true",
         ]
         with open(ENV_PATH, "w", encoding="utf-8") as f:
